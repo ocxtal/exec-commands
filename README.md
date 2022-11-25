@@ -3,7 +3,7 @@
 
 **exec-commands** is a utility to update command-line-tool examples embedded in markdown files. It scans `.md`-suffixed files in a directory, extracts all code blocks with a `console` attribute, executes each `$`-prefixed line in a shell, and embeds the result right below the line.
 
-**注意: exec-commandsを使うときは、必ずsandboxedな環境の中で使用してください。exec-commandsはコマンドをwrapせずに実行するので、ホストの環境を悪意のあるコマンド列から保護することができません。**
+**Note: Please use exec-commands inside a sandbox. exec-command itself doesn't have any mechanism to protect the host environment from malicious commands embedded in markdown files.**
 
 ## Options
 
@@ -17,14 +17,15 @@ USAGE:
     exec-commands [OPTIONS] [INPUTS]...
 
 ARGS:
-    <INPUTS>...    Files to scan and execute `console` blocks
+    <INPUTS>...    Input markdown files (overrides config and glob)
 
 OPTIONS:
-    -c, --config <CONFIG>    Path to config file (loads .exec-commands.yaml if exists)
+    -c, --config <CONFIG>    Path to config file (it always loads .exec-commands.yaml if exists)
     -d, --diff               Take diff between original and updated contents
-    -e, --extension <EXT>    Extension of files to scan [default: md]
+    -e, --extension <EXT>    Extension of files to scan (when no file specified by config or
+                             argument) [default: md]
     -h, --help               Print help information
-        --path <PATH>        Additional paths to find commnands (colon-delimited)
+        --path <PATH>        Additional paths to find commands (colon-delimited)
         --pwd <PWD>          Directory where commands are executed
     -r, --reverse            Remove existing output lines
     -V, --version            Print version information
@@ -32,35 +33,39 @@ OPTIONS:
 
 ## Configuration file format
 
-設定ファイルはyaml形式です。以下のフィールドがあります。
-
-* inputs: 入力markdownファイルのリストです。特定のファイルのみをスキャンするように明示する場合に使います。
-* pwd: コマンドを実行する際のworking directoryです。
-* path: コマンド (実行バイナリ) を探索するパスのリストです。Unixのパス形式 (コロンで連結される) です。
-* alt: コマンド置換テーブルで、(raw, alt) のリストです。rawを発見したとき、代わりにaltを実行します。
-  * raw: markdownファイルに現れる、もとのコマンドです
-  * alt: rawの代わりに実行されるコマンドです。実行をスキップするときは `:` とします。
-* hooks: ブロックやファイルの前後で実行されるhookを指定します。
-  * pre_file: ファイルの先頭 (すべてのブロックをスキャンする前) で実行されるコマンドのリストです。
-  * post_file: ファイルの末尾 (すべてのブロックをスキャンした後) で実行されるコマンドのリストです。
-  * pre_block: ブロックの先頭 (ブロック内のコマンドを実行する前) で実行されるコマンドのリストです。
-  * post_block: ブロックの末尾 (ブロック内のコマンドを実行した後) で実行されるコマンドのリストです。
-
-以下に例を示します。
+It takes configuration in the yaml format. Below is an example and description of the fields.
 
 ```yaml
+# `inputs` is an array of input files.
 inputs:
   - README.md
+  - doc/**/*.md  	# wildcard allowed; `**` matches directories with zero or more depths.
 
-pwd: "test/"
-path: "target/debug"
+# `pwd` specifies the directory to run commands
+pwd: "test"
 
+# `path` is additional directories to search commands; it expands environment variables.
+path: "target/debug:$HOME/.cargo/bin"
+
+# `alt` is a list of command substitutions. when it finds `raw`, it executes `alt` instead.
 alt:
   - raw: "EDITOR=vim nd --inplace --patch-back=vipe quick.txt"
     alt: "nd --inplace --patch patch.txt quick.txt"
 
+# it executes a sequence of commands before and after every block and file.
 hooks:
   pre_block:
-    - "echo pre-block"
-    - "echo pre-block again"
+    - "git clean -f -d"
+    - "git checkout HEAD ."
+  post_block:
+    - ":"
+  pre_file:
+    - ":"
+  post_file:
+    - "git clean -f -d"
+    - "git checkout HEAD ."
 ```
+
+## Copyright and License
+
+2022, Hajime Suzuki. Licensed under MIT.
