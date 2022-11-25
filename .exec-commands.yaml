@@ -1,3 +1,4 @@
 inputs:
-  - README.md
+  - "**/*.md"
 path: "target/debug"
+
