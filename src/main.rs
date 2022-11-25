@@ -43,7 +43,11 @@ struct Args {
     )]
     pwd: Option<String>,
 
-    #[clap(long, value_name = "PATH", help = "Additional paths to find commands (colon-delimited)")]
+    #[clap(
+        long,
+        value_name = "PATH",
+        help = "Additional paths to find commands (colon-delimited)"
+    )]
     path: Option<String>,
 
     #[clap(
