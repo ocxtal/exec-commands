@@ -44,7 +44,7 @@ pub struct Hooks {
     pub post_file: Vec<String>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Config {
     pub pwd: PathBuf,
     pub path: String,
@@ -52,34 +52,71 @@ pub struct Config {
     pub hooks: Hooks,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        let pwd = std::env::current_dir().unwrap();
+        let path = std::env::var("PATH").unwrap_or_default();
+
+        Config {
+            pwd,
+            path,
+            alt: HashMap::new(),
+            hooks: Hooks::default(),
+        }
+    }
+}
+
+pub fn compose_pwd(pwd: &str) -> PathBuf {
+    std::fs::canonicalize(PathBuf::from(pwd)).unwrap()
+}
+
+pub fn compose_path(path: &str) -> String {
+    // convert colon-delimited paths to absolute ones
+    let path = path
+        .split(':')
+        .map(|x| std::fs::canonicalize(x).unwrap())
+        .collect::<Vec<_>>();
+
+    let mut buf = String::new();
+    for x in &path {
+        buf.push_str(x.to_str().unwrap());
+        buf.push(':');
+    }
+
+    // and append environment paths at the tail
+    let env_path = std::env::var("PATH").unwrap_or_default();
+    buf.push_str(&env_path);
+
+    buf
+}
+
 impl Config {
     fn from_raw(raw: &RawConfig) -> Self {
         // alternative command map
         let alt = raw.alt.as_ref().map_or(HashMap::new(), |x| {
-            x.into_iter()
+            x.iter()
                 .map(|x| (x.raw.clone(), x.alt.clone()))
                 .collect::<HashMap<String, String>>()
         });
 
         // current working directory
         let pwd = if let Some(pwd) = &raw.pwd {
-            PathBuf::from(pwd)
+            compose_pwd(pwd)
         } else {
             std::env::current_dir().unwrap()
         };
 
         // unix-style search paths
-        let path = std::env::var("PATH").unwrap_or(String::new());
-        let path = if let Some(add) = &raw.path {
-            format!("{}:{}", add, path)
-        } else {
-            path
-        };
+        let path = compose_path(raw.path.as_deref().unwrap_or(""));
 
         // pre- and post-hooks
         let hooks = if let Some(hooks) = &raw.hooks {
             let clone_or_default = |x: &Option<Vec<String>>| -> Vec<String> {
-                if let Some(x) = x { x.clone() } else { Vec::new() }
+                if let Some(x) = x {
+                    x.clone()
+                } else {
+                    Vec::new()
+                }
             };
 
             Hooks {
@@ -92,7 +129,12 @@ impl Config {
             Hooks::default()
         };
 
-        Config { pwd, path, alt, hooks }
+        Config {
+            pwd,
+            path,
+            alt,
+            hooks,
+        }
     }
 }
 
@@ -101,7 +143,10 @@ pub fn load_config(config: &str) -> Result<(Option<Vec<PathBuf>>, Config)> {
     let config: RawConfig = serde_yaml::from_str(&config)?;
 
     let inputs = config.inputs.as_ref().map(|inputs| {
-        inputs.iter().map(|x| PathBuf::from_str(x).unwrap()).collect::<Vec<_>>()
+        inputs
+            .iter()
+            .map(|x| PathBuf::from_str(x).unwrap())
+            .collect::<Vec<_>>()
     });
 
     Ok((inputs, Config::from_raw(&config)))

@@ -1,17 +1,22 @@
 mod config;
+mod diff;
 mod scan;
 
 use crate::config::*;
+use crate::diff::*;
 use crate::scan::*;
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use glob::glob;
 use std::path::PathBuf;
-use std::str::FromStr;
 
 #[derive(Debug, Parser)]
-#[clap(author = "Hajime Suzuki (suzuki.hajime.s@gmail.com)", version = "0.0.1", about = "scan markdown files and execute `console` blocks")]
+#[clap(
+    author = "Hajime Suzuki (suzuki.hajime.s@gmail.com)",
+    version = "0.0.1",
+    about = "scan markdown files and execute `console` blocks"
+)]
 struct Args {
     #[clap(help = "Files to scan and execute `console` blocks")]
     inputs: Vec<PathBuf>,
@@ -19,10 +24,16 @@ struct Args {
     #[clap(short, long, help = "Remove existing output lines")]
     reverse: bool,
 
-    #[clap(long, help = "Only check if the files will be updated")]
-    check: bool,
+    #[clap(short, long, help = "Take diff between original and updated contents")]
+    diff: bool,
 
-    #[clap(short, long, value_name = "EXT", help = "Extension of files to scan", default_value = "md")]
+    #[clap(
+        short,
+        long,
+        value_name = "EXT",
+        help = "Extension of files to scan",
+        default_value = "md"
+    )]
     extension: String,
 
     #[clap(
@@ -32,11 +43,7 @@ struct Args {
     )]
     pwd: Option<String>,
 
-    #[clap(
-        long,
-        value_name = "PATH",
-        help = "Additional paths to find commnands"
-    )]
+    #[clap(long, value_name = "PATH", help = "Additional paths to find commnands")]
     path: Option<String>,
 
     #[clap(
@@ -60,19 +67,22 @@ fn main() -> Result<()> {
 
     // the default configuration file path is ./.exec-commands.yaml
     // unless specified by the command-line option
-    let config = args.config.unwrap_or(".exec-commands.yaml".to_string());
+    let config = args
+        .config
+        .unwrap_or_else(|| ".exec-commands.yaml".to_string());
     let (inputs, config) = load_config(&config).unwrap_or((None, Config::default()));
 
-    if args.reverse && args.check {
-        return Err(anyhow!("--reverse (-r) and --check are exclusive."));
+    if args.reverse && args.diff {
+        return Err(anyhow!("--reverse (-r) and --diff (-d) are exclusive."));
     }
 
+    // --pwd and --path precedes over config; it overwrites the existing ones
     let mut config = config;
     if let Some(pwd) = args.pwd {
-        config.pwd = PathBuf::from_str(&pwd).unwrap();
+        config.pwd = compose_pwd(&pwd);
     }
     if let Some(path) = args.path {
-        config.path = path.to_string();
+        config.path = compose_path(&path);
     }
 
     // collect input files; argument > config > glob
@@ -82,6 +92,7 @@ fn main() -> Result<()> {
         inputs.unwrap_or(glob_files(&args.extension)?)
     };
 
+    let mut has_diff = false;
     for file in &inputs {
         let original = std::fs::read_to_string(file)?;
 
@@ -94,11 +105,15 @@ fn main() -> Result<()> {
             insert_command_outputs(&removed, &config)?
         };
 
-        if args.check {
-            assert_eq!(&original, &added);
+        if args.diff {
+            has_diff |= print_diff(file.to_str().unwrap(), &original, &added)?;
         } else {
             std::fs::write(file, &added)?;
         }
+    }
+
+    if has_diff {
+        std::process::exit(1);
     }
 
     Ok(())

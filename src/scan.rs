@@ -58,12 +58,13 @@ trait RunCommand {
 
 impl RunCommand for Config {
     fn run(&self, command: &str) -> Result<Vec<u8>> {
-        // let command = &format!("cd {:?}; {}", self.pwd, command);
-        eprintln!("{}", command);
-        eprintln!("{}", self.path);
-
-        let output = Command::new("bash").env("PATH", &self.path).args(["-c", command]).output()?;
-
+        let command = &format!(
+            "PATH={}; cd {}; {}",
+            self.path,
+            self.pwd.to_str().unwrap(),
+            command
+        );
+        let output = Command::new("bash").args(["-c", command]).output()?;
         Ok(output.stdout)
     }
 
