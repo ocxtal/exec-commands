@@ -9,7 +9,7 @@ use crate::scan::*;
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use glob::glob;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -43,7 +43,7 @@ struct Args {
     )]
     pwd: Option<String>,
 
-    #[clap(long, value_name = "PATH", help = "Additional paths to find commnands (colon-delimited)")]
+    #[clap(long, value_name = "PATH", help = "Additional paths to find commands (colon-delimited)")]
     path: Option<String>,
 
     #[clap(
@@ -70,7 +70,12 @@ fn main() -> Result<()> {
     let config = args
         .config
         .unwrap_or_else(|| ".exec-commands.yaml".to_string());
-    let (inputs, config) = load_config(&config).unwrap_or((None, Config::default()));
+
+    let (inputs, config) = if Path::new(&config).exists() {
+        load_config(&config)?
+    } else {
+        (None, Config::default())
+    };
 
     if args.reverse && args.diff {
         return Err(anyhow!("--reverse (-r) and --diff (-d) are exclusive."));
