@@ -49,8 +49,8 @@ path: "target/debug:$HOME/.cargo/bin"
 
 # `alt` is a list of command substitutions. when it finds `raw`, it executes `alt` instead.
 alt:
-  - raw: "EDITOR=vim nd --inplace --patch-back=vipe quick.txt"
-    alt: "nd --inplace --patch patch.txt quick.txt"
+  - raw: "some-command --option-that-takes-long-time"
+    alt: "another-command --with-the-fastest-option"
 
 # it executes a sequence of commands before and after every block and file.
 hooks:
