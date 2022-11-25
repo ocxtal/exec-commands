@@ -18,7 +18,7 @@ use std::path::PathBuf;
     about = "scan markdown files and execute `console` blocks"
 )]
 struct Args {
-    #[clap(help = "Files to scan and execute `console` blocks")]
+    #[clap(help = "Input markdown files (overrides config and glob)")]
     inputs: Vec<PathBuf>,
 
     #[clap(short, long, help = "Remove existing output lines")]
@@ -31,7 +31,7 @@ struct Args {
         short,
         long,
         value_name = "EXT",
-        help = "Extension of files to scan",
+        help = "Extension of files to scan (when no file specified by config or argument)",
         default_value = "md"
     )]
     extension: String,
@@ -50,7 +50,7 @@ struct Args {
         short,
         long,
         value_name = "CONFIG",
-        help = "Path to config file (loads .exec-commands.yaml if exists)"
+        help = "Path to config file (it always loads .exec-commands.yaml if exists)"
     )]
     config: Option<String>,
 }
