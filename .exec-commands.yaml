@@ -1,0 +1,3 @@
+inputs:
+  - README.md
+path: "target/debug"
