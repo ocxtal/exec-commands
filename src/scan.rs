@@ -148,7 +148,7 @@ pub fn insert_command_outputs(contents: &str, config: &Config) -> Result<String>
             config.post_block_hook()?;
         }
     }
-    config.post_block_hook()?;
+    config.post_file_hook()?;
 
     Ok(inserted)
 }
