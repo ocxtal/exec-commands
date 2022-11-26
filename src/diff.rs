@@ -24,7 +24,7 @@ pub fn print_diff(filename: &str, old: &str, new: &str) -> Result<bool> {
         has_diff = true;
 
         if idx == 0 {
-            println!("@@ {}", filename);
+            println!("--- {}.original\n+++ {}.updated", filename, filename);
         } else {
             println!("{:-^1$}", "-", 80);
         }
