@@ -1,5 +1,5 @@
 use crate::config::Config;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::process::Command;
 
 enum State {
@@ -20,7 +20,7 @@ impl State {
     }
 
     /// returns (keep, clear, command)
-    fn update<'a, 'b>(&'a mut self, line: &'b str) -> (bool, BlockHook, Option<&'b str>) {
+    fn update<'a>(&mut self, line: &'a str) -> (bool, BlockHook, Option<&'a str>) {
         match self {
             State::OutOfBlock => {
                 if line.starts_with("```console") {
@@ -49,7 +49,7 @@ impl State {
 }
 
 trait RunCommand {
-    fn run(&self, command: &str) -> Result<Vec<u8>>;
+    fn run(&self, command: &str) -> Result<(bool, Vec<u8>)>;
     fn pre_block_hook(&self) -> Result<()>;
     fn post_block_hook(&self) -> Result<()>;
     fn pre_file_hook(&self) -> Result<()>;
@@ -57,41 +57,60 @@ trait RunCommand {
 }
 
 impl RunCommand for Config {
-    fn run(&self, command: &str) -> Result<Vec<u8>> {
+    fn run(&self, raw_command: &str) -> Result<(bool, Vec<u8>)> {
         let command = &format!(
             "PATH={}; cd {}; {}",
             self.path,
             self.pwd.to_str().unwrap(),
-            command
+            raw_command
         );
         let output = Command::new("bash").args(["-c", command]).output()?;
-        Ok(output.stdout)
+
+        // FIXME: should we use logger?
+        if !output.status.success() {
+            eprintln!(
+                "[exec-commands] {:?} returned {}.\n{}",
+                raw_command,
+                output.status.code().unwrap(),
+                std::str::from_utf8(&output.stderr).unwrap().trim()
+            );
+        }
+
+        Ok((output.status.success(), output.stdout))
     }
 
     fn pre_block_hook(&self) -> Result<()> {
         for command in &self.hooks.pre_block {
-            self.run(command)?;
+            if !self.run(command)?.0 {
+                return Err(anyhow!("aborting pre_block_hook..."));
+            }
         }
         Ok(())
     }
 
     fn post_block_hook(&self) -> Result<()> {
         for command in &self.hooks.post_block {
-            self.run(command)?;
+            if !self.run(command)?.0 {
+                return Err(anyhow!("aborting post_block_hook..."));
+            }
         }
         Ok(())
     }
 
     fn pre_file_hook(&self) -> Result<()> {
         for command in &self.hooks.pre_file {
-            self.run(command)?;
+            if !self.run(command)?.0 {
+                return Err(anyhow!("aborting pre_file_hook..."));
+            }
         }
         Ok(())
     }
 
     fn post_file_hook(&self) -> Result<()> {
         for command in &self.hooks.post_file {
-            self.run(command)?;
+            if !self.run(command)?.0 {
+                return Err(anyhow!("aborting post_file_hook..."));
+            }
         }
         Ok(())
     }
@@ -136,7 +155,7 @@ pub fn insert_command_outputs(contents: &str, config: &Config) -> Result<String>
                 command
             };
 
-            let output = config.run(command)?;
+            let (_, output) = config.run(command)?;
             inserted.push_str(std::str::from_utf8(&output).unwrap());
 
             if !output.is_empty() && output.last() != Some(&b'\n') {
