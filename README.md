@@ -44,7 +44,7 @@ inputs:
 # `pwd` specifies the directory to run commands
 pwd: "test"
 
-# `path` is additional directories to search commands; it expands environment variables.
+# `path` is additional directories to search commands; expands the PATH environment variable.
 path: "target/debug:$HOME/.cargo/bin"
 
 # `alt` is a list of command substitutions. when it finds `raw`, it executes `alt` instead.
