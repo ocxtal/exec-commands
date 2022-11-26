@@ -69,10 +69,11 @@ impl RunCommand for Config {
         // FIXME: should we use logger?
         if !output.status.success() {
             eprintln!(
-                "[exec-commands] {:?} returned {}.\n{}",
+                "[exec-commands] {:?} exited with {}.\n{}\n{}",
                 raw_command,
                 output.status.code().unwrap(),
-                std::str::from_utf8(&output.stderr).unwrap().trim()
+                std::str::from_utf8(&output.stderr).unwrap().trim(),
+                std::str::from_utf8(&output.stdout).unwrap().trim(),
             );
         }
 
