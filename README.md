@@ -39,12 +39,12 @@ It takes configuration in the yaml format. Below is an example and description o
 # `inputs` is an array of input files.
 inputs:
   - README.md
-  - doc/**/*.md  	# wildcard allowed; `**` matches directories with zero or more depths.
+  - doc/**/*.md     # wildcard allowed; `**` matches directories with zero or more depths.
 
 # `pwd` specifies the directory to run commands
 pwd: "test"
 
-# `path` is additional directories to search commands; expands the PATH environment variable.
+# `path` is additional directories to search commands; extends the PATH environment variable.
 path: "target/debug:$HOME/.cargo/bin"
 
 # `alt` is a list of command substitutions. when it finds `raw`, it executes `alt` instead.
