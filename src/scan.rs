@@ -81,6 +81,7 @@ impl RunCommand for Config {
 
     fn pre_block_hook(&self) -> Result<()> {
         for command in &self.hooks.pre_block {
+            // note: any error in hooks is regarded as a fatal error
             if !self.run(command)?.0 {
                 return Err(anyhow!("aborting pre_block_hook..."));
             }
@@ -131,11 +132,13 @@ pub fn remove_existing_command_outputs(contents: &str) -> Result<String> {
     Ok(filtered)
 }
 
-pub fn insert_command_outputs(contents: &str, config: &Config) -> Result<String> {
+pub fn insert_command_outputs(contents: &str, config: &Config) -> Result<(bool, String)> {
     let mut state = State::new();
     let mut inserted = String::new();
 
     config.pre_file_hook()?;
+
+    let mut all_successful = true;
     for line in contents.lines() {
         let (keep, hook, command) = state.update(line);
 
@@ -155,9 +158,11 @@ pub fn insert_command_outputs(contents: &str, config: &Config) -> Result<String>
                 command
             };
 
-            let (_, output) = config.run(command)?;
-            inserted.push_str(std::str::from_utf8(&output).unwrap());
+            let (success, output) = config.run(command)?;
+            all_successful &= success;
 
+            // collect output to buf; supplement trailing \n if missing
+            inserted.push_str(std::str::from_utf8(&output).unwrap());
             if !output.is_empty() && output.last() != Some(&b'\n') {
                 inserted.push('\n');
             }
@@ -169,5 +174,5 @@ pub fn insert_command_outputs(contents: &str, config: &Config) -> Result<String>
     }
     config.post_file_hook()?;
 
-    Ok(inserted)
+    Ok((all_successful, inserted))
 }

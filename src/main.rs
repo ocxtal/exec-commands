@@ -101,7 +101,7 @@ fn main() -> Result<()> {
         inputs.unwrap_or(glob_files(&args.extension)?)
     };
 
-    let mut has_diff = false;
+    let mut all_successful = true;
     for file in &inputs {
         let original = std::fs::read_to_string(file)?;
 
@@ -111,17 +111,20 @@ fn main() -> Result<()> {
         let added = if args.reverse {
             removed
         } else {
-            insert_command_outputs(&removed, &config)?
+            let (success, added) = insert_command_outputs(&removed, &config)?;
+            all_successful &= success;
+
+            added
         };
 
         if args.diff {
-            has_diff |= print_diff(file.to_str().unwrap(), &original, &added)?;
+            all_successful &= !print_diff(file.to_str().unwrap(), &original, &added)?;
         } else {
             std::fs::write(file, &added)?;
         }
     }
 
-    if has_diff {
+    if !all_successful {
         std::process::exit(1);
     }
 
