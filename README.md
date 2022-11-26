@@ -51,6 +51,8 @@ path: "target/debug:$HOME/.cargo/bin"
 alt:
   - raw: "some-command --option-that-takes-long-time"
     alt: "another-command --with-the-fastest-option"
+  - raw: "one-more-command --that-takes-user-input"
+    alt: "alternative-command --that-runs-without-user-input"
 
 # it executes a sequence of commands before and after every block and file.
 hooks:
