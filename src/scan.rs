@@ -1,5 +1,5 @@
-use Attr::*;
 use crate::config::Config;
+use Attr::*;
 
 use anyhow::{anyhow, Result};
 use std::io::Write;
@@ -25,7 +25,8 @@ impl Attr {
     fn next(&self, line: &str) -> Attr {
         match *self {
             BaseText | ConsoleFooter | OthersFooter => self.parse_base_text(line),
-            ConsoleHeader | ConsoleHeaderContd | ConsoleComment | ConsoleOutput | ConsoleCommand | ConsoleCommandEnd => self.parse_command(line),
+            ConsoleHeader | ConsoleHeaderContd | ConsoleComment | ConsoleOutput
+            | ConsoleCommand | ConsoleCommandEnd => self.parse_command(line),
             OthersHeader | OthersContent => self.parse_others(line),
         }
     }
@@ -49,7 +50,7 @@ impl Attr {
 
     fn parse_command(&self, line: &str) -> Attr {
         if line.starts_with("$ ") || line.starts_with("# ") {
-            if line.ends_with("\\") {
+            if line.ends_with('\\') {
                 return ConsoleCommand;
             }
             return ConsoleCommandEnd;
@@ -72,7 +73,7 @@ impl Attr {
     }
 }
 
-fn annotate_lines<'a>(doc: &'a str) -> Vec<(&'a str, Attr)> {
+fn annotate_lines(doc: &str) -> Vec<(&str, Attr)> {
     let mut attrs = Vec::new();
     let _ = doc.lines().fold(BaseText, |attr, line| {
         let next = attr.next(line);
@@ -148,12 +149,16 @@ impl Run for Config {
         let mut file = NamedTempFile::new()?;
 
         // let mut file = file.into_file();
-        let header = format!(r#"
+        let header = format!(
+            r#"
             #! /bin/bash
             set -eu -o pipefail
             export PATH={}
             cd {}
-        "#, self.path, self.pwd.display());
+        "#,
+            self.path,
+            self.pwd.display()
+        );
         file.write_all(header.as_bytes())?;
         file.write_all(raw_commands.as_bytes())?;
 

@@ -114,7 +114,8 @@ impl Config {
 
         // pre- and post-hooks
         let hooks = if let Some(hooks) = &raw.hooks {
-            let join = |x: &Option<Vec<String>>| { x.as_deref().map_or_else(|| String::new(), |x| x.join("\n")) };
+            let join =
+                |x: &Option<Vec<String>>| x.as_deref().map_or_else(String::new, |x| x.join("\n"));
             Hooks {
                 pre_block: join(&hooks.pre_block),
                 post_block: join(&hooks.post_block),
