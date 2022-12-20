@@ -1,179 +1,234 @@
+use Attr::*;
 use crate::config::Config;
+
 use anyhow::{anyhow, Result};
+use std::io::Write;
 use std::process::Command;
+use tempfile::NamedTempFile;
 
-enum State {
-    OutOfBlock,
-    InsideBlock,
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum Attr {
+    BaseText,
+    ConsoleHeader,
+    ConsoleHeaderContd,
+    ConsoleCommand,
+    ConsoleCommandEnd,
+    ConsoleComment,
+    ConsoleOutput,
+    ConsoleFooter,
+    OthersHeader,
+    OthersContent,
+    OthersFooter,
 }
 
-#[derive(Eq, PartialEq)]
-enum BlockHook {
-    None,
-    Pre,
-    Post,
-}
-
-impl State {
-    fn new() -> Self {
-        State::OutOfBlock
+impl Attr {
+    fn next(&self, line: &str) -> Attr {
+        match *self {
+            BaseText | ConsoleFooter | OthersFooter => self.parse_base_text(line),
+            ConsoleHeader | ConsoleHeaderContd | ConsoleComment | ConsoleOutput | ConsoleCommand | ConsoleCommandEnd => self.parse_command(line),
+            OthersHeader | OthersContent => self.parse_others(line),
+        }
     }
 
-    /// returns (keep, clear, command)
-    fn update<'a>(&mut self, line: &'a str) -> (bool, BlockHook, Option<&'a str>) {
-        match self {
-            State::OutOfBlock => {
-                if line.starts_with("```console") {
-                    *self = State::InsideBlock;
-                    return (true, BlockHook::Pre, None);
-                }
-                (true, BlockHook::None, None)
-            }
-            State::InsideBlock => {
-                if line == "```" {
-                    *self = State::OutOfBlock;
-                    return (true, BlockHook::Post, None);
-                }
-                let is_command = line.starts_with('$');
-                let keep = is_command | line.starts_with("  #");
-                let command = if is_command {
-                    Some(line[1..].trim())
-                } else {
-                    None
-                };
+    fn parse_base_text(&self, line: &str) -> Attr {
+        if !line.starts_with("```") {
+            return BaseText;
+        }
 
-                (keep, BlockHook::None, command)
+        let rem = line.strip_prefix("```").unwrap().trim();
+        if !rem.starts_with("console") {
+            return OthersHeader;
+        }
+
+        if rem.split_whitespace().skip(1).any(|x| x == "continued") {
+            ConsoleHeaderContd
+        } else {
+            ConsoleHeader
+        }
+    }
+
+    fn parse_command(&self, line: &str) -> Attr {
+        if line.starts_with("$ ") || line.starts_with("# ") {
+            if line.ends_with("\\") {
+                return ConsoleCommand;
             }
+            return ConsoleCommandEnd;
+        }
+        if line.starts_with("  # ") {
+            return ConsoleComment;
+        }
+        if line.starts_with("```") {
+            return ConsoleFooter;
+        }
+        ConsoleOutput
+    }
+
+    fn parse_others(&self, line: &str) -> Attr {
+        if line.starts_with("```") {
+            OthersFooter
+        } else {
+            OthersContent
         }
     }
 }
 
-trait RunCommand {
-    fn run(&self, command: &str) -> Result<(bool, Vec<u8>)>;
-    fn pre_block_hook(&self) -> Result<()>;
-    fn post_block_hook(&self) -> Result<()>;
-    fn pre_file_hook(&self) -> Result<()>;
-    fn post_file_hook(&self) -> Result<()>;
+fn annotate_lines<'a>(doc: &'a str) -> Vec<(&'a str, Attr)> {
+    let mut attrs = Vec::new();
+    let _ = doc.lines().fold(BaseText, |attr, line| {
+        let next = attr.next(line);
+        attrs.push((line, next));
+        next
+    });
+    attrs
 }
 
-impl RunCommand for Config {
-    fn run(&self, raw_command: &str) -> Result<(bool, Vec<u8>)> {
-        let command = &format!(
-            "PATH={}; cd {}; {}",
-            self.path,
-            self.pwd.to_str().unwrap(),
-            raw_command
-        );
-        let output = Command::new("bash").args(["-c", command]).output()?;
+pub fn remove_existing_command_outputs(doc: &str) -> Result<String> {
+    let annotation = annotate_lines(doc);
+
+    let mut buf = String::new();
+    for &(line, attr) in &annotation {
+        if attr == ConsoleOutput {
+            continue;
+        }
+        buf.push_str(line);
+        buf.push('\n');
+    }
+    Ok(buf)
+}
+
+fn echo(line: &str, buf: &mut String) {
+    let escaped = shell_escape::escape(line.into());
+    buf.push_str("echo ");
+    buf.push_str(&escaped);
+    buf.push('\n');
+}
+
+fn build_commands(config: &Config, annotation: &[(&str, Attr)]) -> Vec<String> {
+    let mut bin = vec![String::new()];
+    let mut command = String::new();
+
+    for &(line, attr) in annotation.iter() {
+        if attr == ConsoleHeader {
+            bin.push(String::new());
+        }
+
+        let buf = bin.last_mut().unwrap();
+        match attr {
+            ConsoleHeader | ConsoleHeaderContd | ConsoleComment | ConsoleFooter => {
+                echo(line, buf);
+            }
+            ConsoleCommand | ConsoleCommandEnd => {
+                echo(line, buf);
+
+                let line = if line.starts_with("$ ") || line.starts_with("# ") {
+                    &line[2..]
+                } else {
+                    line
+                };
+                command.push_str(line);
+                command.push('\n');
+            }
+            _ => {}
+        }
+        if attr == ConsoleCommandEnd {
+            buf.push_str(config.alt.get(&command).unwrap_or(&command));
+            buf.push('\n');
+            command.clear();
+        }
+    }
+    bin
+}
+
+trait Run {
+    fn run(&self, raw_commands: &str, success: &mut bool) -> Result<Vec<u8>>;
+}
+
+impl Run for Config {
+    fn run(&self, raw_commands: &str, success: &mut bool) -> Result<Vec<u8>> {
+        let mut file = NamedTempFile::new()?;
+
+        // let mut file = file.into_file();
+        let header = format!(r#"
+            #! /bin/bash
+            set -eu -o pipefail
+            export PATH={}
+            cd {}
+        "#, self.path, self.pwd.display());
+        file.write_all(header.as_bytes())?;
+        file.write_all(raw_commands.as_bytes())?;
+
+        let output = Command::new("bash").arg(file.path()).output()?;
 
         // FIXME: should we use logger?
         if !output.status.success() {
             eprintln!(
-                "[exec-commands] {:?} exited with {}.\n{}\n{}",
-                raw_command,
+                "[exec-commands] \"bash {}\" exited with {}.\n{}\n{}\n{}",
+                file.path().display(),
                 output.status.code().unwrap(),
+                raw_commands,
                 std::str::from_utf8(&output.stderr).unwrap().trim(),
                 std::str::from_utf8(&output.stdout).unwrap().trim(),
             );
+            *success = false;
         }
 
-        Ok((output.status.success(), output.stdout))
-    }
-
-    fn pre_block_hook(&self) -> Result<()> {
-        for command in &self.hooks.pre_block {
-            // note: any error in hooks is regarded as a fatal error
-            if !self.run(command)?.0 {
-                return Err(anyhow!("aborting pre_block_hook..."));
-            }
-        }
-        Ok(())
-    }
-
-    fn post_block_hook(&self) -> Result<()> {
-        for command in &self.hooks.post_block {
-            if !self.run(command)?.0 {
-                return Err(anyhow!("aborting post_block_hook..."));
-            }
-        }
-        Ok(())
-    }
-
-    fn pre_file_hook(&self) -> Result<()> {
-        for command in &self.hooks.pre_file {
-            if !self.run(command)?.0 {
-                return Err(anyhow!("aborting pre_file_hook..."));
-            }
-        }
-        Ok(())
-    }
-
-    fn post_file_hook(&self) -> Result<()> {
-        for command in &self.hooks.post_file {
-            if !self.run(command)?.0 {
-                return Err(anyhow!("aborting post_file_hook..."));
-            }
-        }
-        Ok(())
+        Ok(output.stdout)
     }
 }
 
-pub fn remove_existing_command_outputs(contents: &str) -> Result<String> {
-    let mut state = State::new();
-    let mut filtered = String::new();
+fn exec_commands(config: &Config, blocks: &[impl AsRef<str>]) -> Result<(bool, String)> {
+    let mut success = true;
+    let mut buf = String::new();
 
-    for line in contents.lines() {
-        let (keep, _, _) = state.update(line);
-        if keep {
-            filtered.push_str(line);
-            filtered.push('\n');
-        }
+    config.run(&config.hooks.pre_file, &mut success)?;
+    for block in blocks {
+        config.run(&config.hooks.pre_block, &mut success)?;
+
+        let output = config.run(block.as_ref(), &mut success)?;
+        buf.push_str(std::str::from_utf8(&output).unwrap());
+
+        config.run(&config.hooks.post_block, &mut success)?;
     }
+    config.run(&config.hooks.post_file, &mut success)?;
 
-    Ok(filtered)
+    Ok((success, buf))
 }
 
-pub fn insert_command_outputs(contents: &str, config: &Config) -> Result<(bool, String)> {
-    let mut state = State::new();
-    let mut inserted = String::new();
+fn merge_outputs(annotation: &[(&str, Attr)], outputs: &str) -> Result<String> {
+    let mut outputs = outputs.lines().peekable();
+    let mut buf = String::new();
 
-    config.pre_file_hook()?;
+    for &(line, attr) in annotation {
+        if matches!(attr, ConsoleHeader | ConsoleHeaderContd) {
+            assert!(outputs.peek().unwrap().starts_with("```"));
 
-    let mut all_successful = true;
-    for line in contents.lines() {
-        let (keep, hook, command) = state.update(line);
+            for line in &mut outputs {
+                buf.push_str(line);
+                buf.push('\n');
 
-        if keep {
-            inserted.push_str(line);
-            inserted.push('\n');
-        }
-
-        if hook == BlockHook::Pre {
-            config.pre_block_hook()?;
-        }
-
-        if let Some(command) = command {
-            let command = if let Some(alt_command) = config.alt.get(command) {
-                alt_command
-            } else {
-                command
-            };
-
-            let (success, output) = config.run(command)?;
-            all_successful &= success;
-
-            // collect output to buf; supplement trailing \n if missing
-            inserted.push_str(std::str::from_utf8(&output).unwrap());
-            if !output.is_empty() && output.last() != Some(&b'\n') {
-                inserted.push('\n');
+                if line == "```" {
+                    break;
+                }
             }
         }
-
-        if hook == BlockHook::Post {
-            config.post_block_hook()?;
+        if matches!(attr, BaseText | OthersHeader | OthersContent | OthersFooter) {
+            buf.push_str(line);
+            buf.push('\n');
         }
     }
-    config.post_file_hook()?;
 
-    Ok((all_successful, inserted))
+    Ok(buf)
+}
+
+pub fn insert_command_outputs(doc: &str, config: &Config) -> Result<(bool, String)> {
+    let annotation = annotate_lines(doc);
+    let commands = build_commands(config, &annotation);
+
+    let (success, outputs) = exec_commands(config, &commands)?;
+    if !success {
+        return Err(anyhow!("failed"));
+    }
+
+    let output = merge_outputs(&annotation, &outputs)?;
+    Ok((success, output))
 }

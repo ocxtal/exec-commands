@@ -41,10 +41,10 @@ struct RawConfig {
 
 #[derive(Debug, Default)]
 pub struct Hooks {
-    pub pre_block: Vec<String>,
-    pub post_block: Vec<String>,
-    pub pre_file: Vec<String>,
-    pub post_file: Vec<String>,
+    pub pre_block: String,
+    pub post_block: String,
+    pub pre_file: String,
+    pub post_file: String,
 }
 
 #[derive(Debug)]
@@ -114,19 +114,12 @@ impl Config {
 
         // pre- and post-hooks
         let hooks = if let Some(hooks) = &raw.hooks {
-            let clone_or_default = |x: &Option<Vec<String>>| -> Vec<String> {
-                if let Some(x) = x {
-                    x.clone()
-                } else {
-                    Vec::new()
-                }
-            };
-
+            let join = |x: &Option<Vec<String>>| { x.as_deref().map_or_else(|| String::new(), |x| x.join("\n")) };
             Hooks {
-                pre_block: clone_or_default(&hooks.pre_block),
-                post_block: clone_or_default(&hooks.post_block),
-                pre_file: clone_or_default(&hooks.pre_file),
-                post_file: clone_or_default(&hooks.post_file),
+                pre_block: join(&hooks.pre_block),
+                post_block: join(&hooks.post_block),
+                pre_file: join(&hooks.pre_file),
+                post_file: join(&hooks.post_file),
             }
         } else {
             Hooks::default()
