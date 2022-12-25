@@ -26,7 +26,8 @@ impl Attr {
         match *self {
             BaseText | ConsoleFooter | OthersFooter => self.parse_base_text(line),
             ConsoleHeader | ConsoleHeaderContd | ConsoleComment | ConsoleOutput
-            | ConsoleCommand | ConsoleCommandEnd => self.parse_command(line),
+            | ConsoleCommandEnd => self.parse_command(line),
+            ConsoleCommand => self.parse_command_continued(line),
             OthersHeader | OthersContent => self.parse_others(line),
         }
     }
@@ -48,12 +49,16 @@ impl Attr {
         }
     }
 
+    fn parse_command_continued(&self, line: &str) -> Attr {
+        if line.ends_with('\\') {
+            return ConsoleCommand;
+        }
+        return ConsoleCommandEnd;
+    }
+
     fn parse_command(&self, line: &str) -> Attr {
         if line.starts_with("$ ") || line.starts_with("# ") {
-            if line.ends_with('\\') {
-                return ConsoleCommand;
-            }
-            return ConsoleCommandEnd;
+            return self.parse_command_continued(line);
         }
         if line.starts_with("  # ") {
             return ConsoleComment;

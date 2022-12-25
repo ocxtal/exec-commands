@@ -1,4 +1,5 @@
 inputs:
   - "**/*.md"
+pwd: "tests"
 path: "target/debug"
 
