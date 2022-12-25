@@ -1,7 +1,18 @@
 
-# exec-command test script
+# exec-commands test script
 
-## scan only console blocks
+The following tests are executed with this configuration:
+
+```console
+$ cat ../.exec-commands.yaml
+inputs:
+  - "**/*.md"
+pwd: "tests"
+path: "target/debug"
+
+```
+
+## Scan only console blocks
 
 ```console
 $ ls
@@ -20,7 +31,7 @@ $ ls
 this output won't be updated as this block is not marked `console`.
 ```
 
-## directory preserved between commands
+## Working directory is preserved between commands
 
 ```console
 $ ls
@@ -33,7 +44,7 @@ $ ls
 tests.md
 ```
 
-## continued
+## "continued" attrubute preserves the environment
 
 ```console
 $ export VAR0="var0"
@@ -55,7 +66,17 @@ $ echo "${VAR0} ${VAR1}"
 var2 var1
 ```
 
-## multiline commands
+```console continued and other attributes are ignored
+$ echo "${VAR0} ${VAR1}"
+var2 var1
+```
+
+```console the attribute continued can be mixed with other attributes
+$ echo "${VAR0} ${VAR1}"
+var2 var1
+```
+
+## Multiline commands
 
 ```console
 $ ls \
@@ -63,5 +84,20 @@ tests.md
 tests.md
 $ ls \
   tests.md
+tests.md
+$ ls \
+\
+tests.md
+tests.md
+$ ls \
+     \
+  tests.md
+tests.md
+```
+
+## Privileged commands (are executed as non-privileged)
+
+```console
+# ls
 tests.md
 ```
