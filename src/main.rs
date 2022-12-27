@@ -70,7 +70,8 @@ struct Args {
         short,
         long,
         value_name = "WHEN",
-        help = "Colorize the output"
+        help = "Colorize the output",
+        default_value = "auto"
     )]
     color: Color,
 }
