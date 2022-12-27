@@ -7,9 +7,16 @@ use crate::diff::*;
 use crate::scan::*;
 
 use anyhow::{anyhow, Context, Result};
-use clap::Parser;
+use clap::{ArgEnum, Parser};
 use glob::glob;
 use std::path::{Path, PathBuf};
+
+#[derive(ArgEnum, Clone, Debug)]
+enum Color {
+    Auto,
+    Never,
+    Always,
+}
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -57,6 +64,15 @@ struct Args {
         help = "Path to config file (it always loads .exec-commands.yaml if exists)"
     )]
     config: Option<String>,
+
+    #[clap(
+        arg_enum,
+        short,
+        long,
+        value_name = "WHEN",
+        help = "Colorize the output"
+    )]
+    color: Color,
 }
 
 fn glob_files(ext: &str) -> Result<Vec<PathBuf>> {
@@ -68,6 +84,12 @@ fn glob_files(ext: &str) -> Result<Vec<PathBuf>> {
 
 fn main() -> Result<()> {
     let args = Args::parse();
+
+    if matches!(args.color, Color::Always | Color::Never) {
+        let enable = matches!(args.color, Color::Always);
+        console::set_colors_enabled(enable);
+        console::set_colors_enabled_stderr(enable);
+    }
 
     // the default configuration file path is ./.exec-commands.yaml
     // unless specified by the command-line option
