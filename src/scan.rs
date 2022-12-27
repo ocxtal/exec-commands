@@ -137,7 +137,8 @@ fn build_commands(config: &Config, annotation: &[(&str, Attr)]) -> Vec<String> {
             _ => {}
         }
         if attr == ConsoleCommandEnd {
-            buf.push_str(config.alt.get(&command).unwrap_or(&command));
+            let trimmed = command.trim();
+            buf.push_str(config.alt.get(trimmed).map(|x| x.as_str()).unwrap_or(trimmed));
             buf.push('\n');
             command.clear();
         }
