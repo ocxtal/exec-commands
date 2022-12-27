@@ -60,7 +60,7 @@ impl Attr {
         if line.starts_with("$ ") || line.starts_with("# ") {
             return self.parse_command_continued(line);
         }
-        if line.starts_with("  # ") {
+        if line.starts_with("  #") {
             return ConsoleComment;
         }
         if line.starts_with("```") {
