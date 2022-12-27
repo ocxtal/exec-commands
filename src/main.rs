@@ -67,7 +67,6 @@ struct Args {
 
     #[clap(
         arg_enum,
-        short,
         long,
         value_name = "WHEN",
         help = "Colorize the output",
