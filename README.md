@@ -21,6 +21,8 @@ ARGS:
 
 OPTIONS:
     -c, --config <CONFIG>    Path to config file (it always loads .exec-commands.yaml if exists)
+        --color <WHEN>       Colorize the output [default: auto] [possible values: auto, never,
+                             always]
     -d, --diff               Take diff between original and updated contents
     -e, --extension <EXT>    Extension of files to scan (when no file specified by config or
                              argument) [default: md]
