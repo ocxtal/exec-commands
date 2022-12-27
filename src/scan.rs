@@ -237,7 +237,7 @@ pub fn insert_command_outputs(doc: &str, config: &Config) -> Result<(bool, Strin
 
     let (success, outputs) = exec_commands(config, &commands)?;
     if !success {
-        return Err(anyhow!("failed"));
+        return Err(anyhow!("the command block(s) above returned error."));
     }
 
     let output = merge_outputs(&annotation, &outputs)?;
