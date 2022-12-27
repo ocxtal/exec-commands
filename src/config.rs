@@ -110,7 +110,11 @@ impl Config {
         };
 
         // unix-style search paths
-        let path = compose_path(raw.path.as_deref().unwrap_or(""));
+        let path = if let Some(path) = &raw.path {
+            compose_path(path)
+        } else {
+            "".to_string()
+        };
 
         // pre- and post-hooks
         let hooks = if let Some(hooks) = &raw.hooks {
