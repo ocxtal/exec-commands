@@ -101,6 +101,7 @@ name = "exec-commands"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "atty",
  "clap",
  "console",
  "gaol",

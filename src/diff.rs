@@ -4,6 +4,7 @@ use anyhow::Result;
 use console::{style, Style};
 use similar::{ChangeTag, TextDiff};
 use std::fmt;
+use std::io::Write;
 
 struct Line(Option<usize>);
 
@@ -16,7 +17,7 @@ impl fmt::Display for Line {
     }
 }
 
-pub fn print_diff(filename: &str, old: &str, new: &str) -> Result<bool> {
+pub fn print_diff(filename: &str, old: &str, new: &str, out: &mut impl Write) -> Result<bool> {
     let diff = TextDiff::from_lines(old, new);
 
     let mut has_diff = false;
@@ -24,9 +25,9 @@ pub fn print_diff(filename: &str, old: &str, new: &str) -> Result<bool> {
         has_diff = true;
 
         if idx == 0 {
-            println!("--- {}.original\n+++ {}.updated", filename, filename);
+            writeln!(out, "--- {}.original\n+++ {}.updated", filename, filename)?;
         } else {
-            println!("{:-^1$}", "-", 80);
+            writeln!(out, "{:-^1$}", "-", 80)?;
         }
 
         for op in group {
@@ -36,21 +37,22 @@ pub fn print_diff(filename: &str, old: &str, new: &str) -> Result<bool> {
                     ChangeTag::Insert => ("+", Style::new().green()),
                     ChangeTag::Equal => (" ", Style::new().dim()),
                 };
-                print!(
+                write!(
+                    out,
                     "{}{} |{}",
                     style(Line(change.old_index())).dim(),
                     style(Line(change.new_index())).dim(),
                     s.apply_to(sign).bold(),
-                );
+                )?;
                 for (emphasized, value) in change.iter_strings_lossy() {
                     if emphasized {
-                        print!("{}", s.apply_to(value).underlined().on_black());
+                        write!(out, "{}", s.apply_to(value).underlined().on_black())?;
                     } else {
-                        print!("{}", s.apply_to(value));
+                        write!(out, "{}", s.apply_to(value))?;
                     }
                 }
                 if change.missing_newline() {
-                    println!();
+                    writeln!(out)?;
                 }
             }
         }

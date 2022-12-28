@@ -7,9 +7,12 @@ use crate::diff::*;
 use crate::scan::*;
 
 use anyhow::{anyhow, Context, Result};
+use atty::Stream;
 use clap::{ArgEnum, Parser};
 use glob::glob;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
 
 #[derive(ArgEnum, Clone, Debug)]
 enum Color {
@@ -80,6 +83,9 @@ struct Args {
         default_value = "auto"
     )]
     color: Color,
+
+    #[clap(long, value_name = "PAGER", help = "Feed the diff output to PAGER.")]
+    pager: Option<String>,
 }
 
 fn set_output_color(args: &Args) {
@@ -88,6 +94,26 @@ fn set_output_color(args: &Args) {
         console::set_colors_enabled(enable);
         console::set_colors_enabled_stderr(enable);
     }
+}
+
+fn build_stdout(args: &Args) -> Result<(Option<Child>, Box<dyn Write>)> {
+    let pager = args.pager.clone().or_else(|| std::env::var("PAGER").ok());
+    if pager.is_none() && !atty::is(Stream::Stdout) {
+        return Ok((None, Box::new(std::io::stdout())));
+    }
+
+    let pager = pager.unwrap_or_else(|| "less -S -F -R".to_string());
+    let args: Vec<_> = pager.as_str().split_whitespace().collect();
+    let mut child = Command::new(args[0])
+        .args(&args[1..])
+        .stdin(Stdio::piped())
+        .spawn()?;
+
+    let input = child
+        .stdin
+        .take()
+        .context("failed to take stdin of the PAGER process")?;
+    Ok((Some(child), Box::new(input)))
 }
 
 fn glob_files(ext: &str) -> Result<Vec<PathBuf>> {
@@ -134,6 +160,7 @@ fn main() -> Result<()> {
     }
 
     set_output_color(&args);
+    let (child, mut stdout) = build_stdout(&args)?;
     let (inputs, config) = build_config(&args)?;
 
     let mut all_successful = true;
@@ -153,12 +180,15 @@ fn main() -> Result<()> {
         };
 
         if args.diff {
-            all_successful &= !print_diff(file.to_str().unwrap(), &original, &added)?;
+            all_successful &= !print_diff(file.to_str().unwrap(), &original, &added, &mut stdout)?;
         } else {
             std::fs::write(file, &added)?;
         }
     }
 
+    if let Some(mut child) = child {
+        let _ = child.wait();
+    }
     if !all_successful {
         std::process::exit(1);
     }
