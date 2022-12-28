@@ -20,17 +20,20 @@ ARGS:
     <INPUTS>...    Input markdown files (overrides config and glob)
 
 OPTIONS:
-    -c, --config <CONFIG>    Path to config file (it always loads .exec-commands.yaml if exists)
-        --color <WHEN>       Colorize the output [default: auto] [possible values: auto, never,
-                             always]
-    -d, --diff               Take diff between original and updated contents
-    -e, --extension <EXT>    Extension of files to scan (when no file specified by config or
-                             argument) [default: md]
-    -h, --help               Print help information
-        --path <PATH>        Additional paths to find commands (colon-delimited)
-        --pwd <PWD>          Directory where commands are executed
-    -r, --reverse            Remove existing output lines
-    -V, --version            Print version information
+    -c, --config <CONFIG>          Path to config file (it always loads .exec-commands.yaml if
+                                   exists)
+        --color <WHEN>             Colorize the output [default: auto] [possible values: auto,
+                                   never, always]
+    -d, --diff                     Take diff between original and updated contents
+    -e, --extension <EXT>          Extension of files to scan (when no file specified by config or
+                                   argument) [default: md]
+    -h, --help                     Print help information
+    -N, --ignore-default-config    Prevent loading .exec-commands.yaml
+        --pager <PAGER>            Feed the diff output to PAGER.
+        --path <PATH>              Additional paths to find commands (colon-delimited)
+        --pwd <PWD>                Directory where commands are executed
+    -r, --reverse                  Remove existing output lines
+    -V, --version                  Print version information
 ```
 
 ## Configuration file format
