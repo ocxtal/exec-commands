@@ -66,6 +66,13 @@ struct Args {
     config: Option<String>,
 
     #[clap(
+        short = 'N',
+        long = "ignore-default-config",
+        help = "Prevent loading .exec-commands.yaml"
+    )]
+    ignore_default_config: bool,
+
+    #[clap(
         arg_enum,
         long,
         value_name = "WHEN",
@@ -75,6 +82,14 @@ struct Args {
     color: Color,
 }
 
+fn set_output_color(args: &Args) {
+    if matches!(args.color, Color::Always | Color::Never) {
+        let enable = matches!(args.color, Color::Always);
+        console::set_colors_enabled(enable);
+        console::set_colors_enabled_stderr(enable);
+    }
+}
+
 fn glob_files(ext: &str) -> Result<Vec<PathBuf>> {
     let files = glob(&format!("./**/*.{}", ext))
         .with_context(|| format!("failed to glob files: \"*.{}\"", ext))?;
@@ -82,39 +97,16 @@ fn glob_files(ext: &str) -> Result<Vec<PathBuf>> {
     Ok(files.map(|x| x.unwrap()).collect::<Vec<_>>())
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
-
-    if matches!(args.color, Color::Always | Color::Never) {
-        let enable = matches!(args.color, Color::Always);
-        console::set_colors_enabled(enable);
-        console::set_colors_enabled_stderr(enable);
-    }
-
+fn build_config(args: &Args) -> Result<(Vec<PathBuf>, Config)> {
     // the default configuration file path is ./.exec-commands.yaml
     // unless specified by the command-line option
-    let config = args
-        .config
-        .unwrap_or_else(|| ".exec-commands.yaml".to_string());
-
-    let (inputs, config) = if Path::new(&config).exists() {
-        load_config(&config)?
+    let (inputs, config) = if let Some(config) = &args.config {
+        load_config(config)?
+    } else if !args.ignore_default_config && Path::new(".exec-commands.yaml").exists() {
+        load_config(".exec-commands.yaml")?
     } else {
         (None, Config::default())
     };
-
-    if args.reverse && args.diff {
-        return Err(anyhow!("--reverse (-r) and --diff (-d) are exclusive."));
-    }
-
-    // --pwd and --path precedes over config; it overwrites the existing ones
-    let mut config = config;
-    if let Some(pwd) = args.pwd {
-        config.pwd = compose_pwd(&pwd);
-    }
-    if let Some(path) = args.path {
-        config.path = compose_path(&path);
-    }
 
     // collect input files; argument > config > glob
     let inputs = if !args.inputs.is_empty() {
@@ -122,6 +114,27 @@ fn main() -> Result<()> {
     } else {
         inputs.unwrap_or(glob_files(&args.extension)?)
     };
+
+    // --pwd and --path precedes over config; it overwrites the existing ones
+    let mut config = config;
+    if let Some(pwd) = &args.pwd {
+        config.pwd = compose_pwd(pwd);
+    }
+    if let Some(path) = &args.path {
+        config.path = compose_path(path);
+    }
+
+    Ok((inputs, config))
+}
+
+fn main() -> Result<()> {
+    let args = Args::parse();
+    if args.reverse && args.diff {
+        return Err(anyhow!("--reverse (-r) and --diff (-d) are exclusive."));
+    }
+
+    set_output_color(&args);
+    let (inputs, config) = build_config(&args)?;
 
     let mut all_successful = true;
     for file in &inputs {
