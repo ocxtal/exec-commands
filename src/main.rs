@@ -153,18 +153,15 @@ fn build_config(args: &Args) -> Result<(Vec<PathBuf>, Config)> {
     Ok((inputs, config))
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
-    if args.reverse && args.diff {
-        return Err(anyhow!("--reverse (-r) and --diff (-d) are exclusive."));
-    }
-
-    set_output_color(&args);
-    let (child, mut stdout) = build_stdout(&args)?;
-    let (inputs, config) = build_config(&args)?;
-
+fn scan_files(
+    args: &Args,
+    config: &Config,
+    inputs: &[PathBuf],
+    stdout: &mut impl Write,
+) -> Result<bool> {
     let mut all_successful = true;
-    for file in &inputs {
+
+    for file in inputs {
         let original = std::fs::read_to_string(file)?;
 
         // first remove existing output lines
@@ -173,23 +170,41 @@ fn main() -> Result<()> {
         let added = if args.reverse {
             removed
         } else {
-            let (success, added) = insert_command_outputs(&removed, &config)?;
+            let (success, added) = insert_command_outputs(&removed, config)?;
             all_successful &= success;
 
             added
         };
 
         if args.diff {
-            all_successful &= !print_diff(file.to_str().unwrap(), &original, &added, &mut stdout)?;
+            all_successful &= !print_diff(file.to_str().unwrap(), &original, &added, stdout)?;
         } else {
             std::fs::write(file, &added)?;
         }
     }
 
+    Ok(all_successful)
+}
+
+fn main() -> Result<()> {
+    let args = Args::parse();
+    if args.reverse && args.diff {
+        return Err(anyhow!("--reverse (-r) and --diff (-d) are exclusive."));
+    }
+
+    set_output_color(&args);
+    let (inputs, config) = build_config(&args)?;
+
+    let (success, child) = {
+        let (child, mut stdout) = build_stdout(&args)?;
+        let success = scan_files(&args, &config, &inputs, &mut stdout)?;
+        (success, child)
+    };
+
     if let Some(mut child) = child {
         let _ = child.wait();
     }
-    if !all_successful {
+    if !success {
         std::process::exit(1);
     }
 
