@@ -53,7 +53,7 @@ impl Attr {
         if line.ends_with('\\') {
             return ConsoleCommand;
         }
-        return ConsoleCommandEnd;
+        ConsoleCommandEnd
     }
 
     fn parse_command(&self, line: &str) -> Attr {
