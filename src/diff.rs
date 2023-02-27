@@ -25,7 +25,7 @@ pub fn print_diff(filename: &str, old: &str, new: &str, out: &mut impl Write) ->
         has_diff = true;
 
         if idx == 0 {
-            writeln!(out, "--- {}.original\n+++ {}.updated", filename, filename)?;
+            writeln!(out, "--- {filename}.original\n+++ {filename}.updated")?;
         } else {
             writeln!(out, "{:-^1$}", "-", 80)?;
         }

@@ -117,8 +117,8 @@ fn build_stdout(args: &Args) -> Result<(Option<Child>, Box<dyn Write>)> {
 }
 
 fn glob_files(ext: &str) -> Result<Vec<PathBuf>> {
-    let files = glob(&format!("./**/*.{}", ext))
-        .with_context(|| format!("failed to glob files: \"*.{}\"", ext))?;
+    let files = glob(&format!("./**/*.{ext}"))
+        .with_context(|| format!("failed to glob files: \"*.{ext}\""))?;
 
     Ok(files.map(|x| x.unwrap()).collect::<Vec<_>>())
 }
