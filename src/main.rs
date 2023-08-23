@@ -8,13 +8,13 @@ use crate::scan::*;
 
 use anyhow::{anyhow, Context, Result};
 use atty::Stream;
-use clap::{ArgEnum, Parser};
+use clap::{Parser, ValueEnum};
 use glob::glob;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-#[derive(ArgEnum, Clone, Debug)]
+#[derive(Clone, Debug, ValueEnum)]
 enum Color {
     Auto,
     Never,
@@ -76,7 +76,7 @@ struct Args {
     ignore_default_config: bool,
 
     #[clap(
-        arg_enum,
+        value_enum,
         long,
         value_name = "WHEN",
         help = "Colorize the output",
